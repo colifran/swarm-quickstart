@@ -137,7 +137,7 @@ TSCONFIG
 
 echo "Copying sample code from deepagentsjs..."
 SAMPLE_DIR="$SCRIPT_DIR/sample-code"
-mkdir -p "$SAMPLE_DIR/backends" "$SAMPLE_DIR/middleware"
+mkdir -p "$SAMPLE_DIR/backends"
 
 # Copy non-test source files from backends
 for f in "$REPO_PATH/libs/deepagents/src/backends/"*.ts; do
@@ -146,16 +146,6 @@ for f in "$REPO_PATH/libs/deepagents/src/backends/"*.ts; do
     *.test.* | *.int.test.*) continue ;;
     index.ts) continue ;;
     *) cp "$f" "$SAMPLE_DIR/backends/" ;;
-  esac
-done
-
-# Copy non-test source files from middleware
-for f in "$REPO_PATH/libs/deepagents/src/middleware/"*.ts; do
-  basename="$(basename "$f")"
-  case "$basename" in
-    *.test.* | *.int.test.* | test.ts) continue ;;
-    index.ts) continue ;;
-    *) cp "$f" "$SAMPLE_DIR/middleware/" ;;
   esac
 done
 

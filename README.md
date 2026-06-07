@@ -1,13 +1,13 @@
 # Swarm Quick Start
 
-Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) project running in one command. The setup script builds deepagentsjs, copies real source files into `sample-code/` for the examples to review, and scaffolds everything into this directory.
+Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780866940-6a9ea66.mintlify.app/oss/javascript/deepagents/swarm) project running in one command. The setup script builds deepagentsjs, copies real source files into `sample-code/` for the examples to review, and scaffolds everything into this directory.
 
 ## Documentation
 
 Familiarize yourself with the docs before diving into the examples — they cover the core concepts behind interpreter libraries and swarm that these examples build on.
 
-- [Interpreter Libraries](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/interpreters#interpreter-libraries) — How to package reusable capabilities that agents can import, and how libraries compose on top of each other.
-- [Swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) — The table-based data model for parallel task fan-out, batching, dispatch modes, and patterns.
+- [Interpreter Libraries](https://langchain-5e9cc07a-preview-colifr-1780866940-6a9ea66.mintlify.app/oss/javascript/deepagents/interpreters#interpreter-libraries) — How to package reusable capabilities that agents can import, and how libraries compose on top of each other.
+- [Swarm](https://langchain-5e9cc07a-preview-colifr-1780866940-6a9ea66.mintlify.app/oss/javascript/deepagents/swarm) — The table-based data model for parallel task fan-out, batching, dispatch modes, and patterns.
 
 For a more complex example where a custom `evaluator` library imports swarm internally to build a multi-pass evaluation pipeline, see `examples/repl/interpreter-libraries/` in the deepagentsjs repo.
 
@@ -61,7 +61,7 @@ The simplest swarm example. Creates a table from inline records, classifies sent
 
 ### 02 — Code Review
 
-Reviews 5 TypeScript backend source files from deepagents. Each file is dispatched to a reviewer subagent, and findings are aggregated by severity.
+Reviews TypeScript backend source files from deepagents. Each file is dispatched to a reviewer subagent, and findings are aggregated by severity.
 
 **What it demonstrates:**
 - `create` with `glob` over a real codebase
