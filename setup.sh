@@ -137,15 +137,26 @@ TSCONFIG
 
 echo "Copying sample code from deepagentsjs..."
 SAMPLE_DIR="$SCRIPT_DIR/sample-code"
-mkdir -p "$SAMPLE_DIR/backends"
+mkdir -p "$SAMPLE_DIR/backends" "$SAMPLE_DIR/middleware"
 
-# Copy selected backend source files (keep it small for quick examples)
-KEEP_FILES="composite.ts langsmith.ts local-shell.ts protocol.ts state.ts"
-for f in $KEEP_FILES; do
-  src="$REPO_PATH/libs/deepagents/src/backends/$f"
-  if [[ -f "$src" ]]; then
-    cp "$src" "$SAMPLE_DIR/backends/"
-  fi
+# Copy non-test source files from backends
+for f in "$REPO_PATH/libs/deepagents/src/backends/"*.ts; do
+  basename="$(basename "$f")"
+  case "$basename" in
+    *.test.* | *.int.test.*) continue ;;
+    index.ts) continue ;;
+    *) cp "$f" "$SAMPLE_DIR/backends/" ;;
+  esac
+done
+
+# Copy non-test source files from middleware
+for f in "$REPO_PATH/libs/deepagents/src/middleware/"*.ts; do
+  basename="$(basename "$f")"
+  case "$basename" in
+    *.test.* | *.int.test.* | test.ts) continue ;;
+    index.ts) continue ;;
+    *) cp "$f" "$SAMPLE_DIR/middleware/" ;;
+  esac
 done
 
 echo "  Copied $(find "$SAMPLE_DIR" -name '*.ts' | wc -l | tr -d ' ') files to sample-code/"
@@ -214,8 +225,8 @@ cat > "$SCRIPT_DIR/02-code-review.ts" <<'EXAMPLE2'
 /**
  * 02 — Code Review (agent mode with tools)
  *
- * Globs the sample-code/backends/ directory into a swarm table,
- * dispatches each file to a reviewer subagent with web search,
+ * Globs the sample-code/ directory into a swarm table,
+ * dispatches each file to a reviewer subagent,
  * and aggregates findings with structured output.
  *
  * Usage: npx tsx 02-code-review.ts
@@ -258,11 +269,12 @@ const agent = createDeepAgent({
 const result = await agent.invoke({
   messages: [
     new HumanMessage(
-      `Review the TypeScript files in sample-code/backends/ using swarm.
+      `Review the TypeScript files in sample-code/ using swarm.
 
-      Create a table from the .ts files using glob, dispatch each to the
-      "reviewer" subagent with a response schema for findings (title, file,
-      severity, description), then summarize the top issues by severity.`
+      Create a table from the .ts files using glob ("sample-code/**/*.ts"),
+      dispatch each to the "reviewer" subagent with a response schema for
+      findings (title, file, severity, description), then summarize the
+      top issues by severity.`
     ),
   ],
 });
@@ -327,7 +339,7 @@ const agent = createDeepAgent({
 const result = await agent.invoke({
   messages: [
     new HumanMessage(
-      `Two-pass review of sample-code/backends/*.ts using swarm.
+      `Two-pass review of sample-code/**/*.ts using swarm.
 
       Pass 1: glob the files into a table, dispatch each to "bug-finder" with
       a findings schema (title, file, severity, description).
@@ -478,7 +490,7 @@ library — you don't need to manage tables or dispatches yourself.
 ```javascript
 import { audit } from "code-auditor";
 
-await audit({ glob: "sample-code/backends/*.ts" });
+await audit({ glob: "sample-code/**/*.ts" });
 
 // Results are written to /audit/results.json
 ```
@@ -581,7 +593,7 @@ const result = await agent.invoke({
     new HumanMessage(
       `Audit the sample code for bugs using the code-auditor library.
 
-      Run: audit({ glob: "sample-code/backends/*.ts" })
+      Run: audit({ glob: "sample-code/**/*.ts" })
 
       Then read /audit/results.json and summarize:
       1. How many findings were reported vs confirmed
