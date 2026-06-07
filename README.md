@@ -1,6 +1,6 @@
 # Swarm Quick Start
 
-Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) project running in one command. The setup script scaffolds a standalone directory with three examples that cover the main swarm patterns.
+Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) project running in one command. The setup script builds deepagentsjs and scaffolds example files directly into this directory.
 
 ## Prerequisites
 
@@ -30,30 +30,9 @@ cd swarm-quickstart
 
 Both options automatically check out the `colifran/interp-libs` branch and build.
 
-### Custom output directory
-
-```bash
-./setup.sh --repo /path/to/deepagentsjs --dir ~/my-swarm-demo
-```
-
-Default output directory is `~/swarm-quickstart`.
-
-## What you get
-
-```
-swarm-quickstart/
-├── .env                              # Add your API keys here
-├── package.json                      # Links to local deepagentsjs packages
-├── tsconfig.json
-├── 01-sentiment-classification.ts    # Invoke mode, single pass
-├── 02-file-review.ts                 # Agent mode with tools
-└── 03-multi-pass-pipeline.ts         # Multi-pass review → verify → filter
-```
-
 ## Run your first example
 
 ```bash
-cd ~/swarm-quickstart
 # Edit .env and add your ANTHROPIC_API_KEY
 npx tsx 01-sentiment-classification.ts
 ```

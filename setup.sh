@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_PATH=""
 CLONE=false
-OUT_DIR="$HOME/swarm-quickstart"
 BRANCH="colifran/interp-libs"
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Scaffold a standalone swarm quick start project.
+Set up this swarm quick start project.
 
 Options:
   --repo PATH    Path to an existing deepagentsjs checkout
   --clone        Clone deepagentsjs to ~/.swarm-quickstart-repo
-  --dir PATH     Output directory (default: ~/swarm-quickstart)
   --help         Show this help
 
 Either --repo or --clone is required.
@@ -23,7 +22,6 @@ Either --repo or --clone is required.
 Examples:
   $(basename "$0") --repo ~/dev/deepagentsjs
   $(basename "$0") --clone
-  $(basename "$0") --clone --dir ~/projects/my-swarm-demo
 EOF
   exit 0
 }
@@ -32,7 +30,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo) REPO_PATH="$2"; shift 2 ;;
     --clone) CLONE=true; shift ;;
-    --dir) OUT_DIR="$2"; shift 2 ;;
     --help) usage ;;
     *) echo "Unknown option: $1"; usage ;;
   esac
@@ -75,14 +72,13 @@ pnpm build
 DEEPAGENTS_PKG="$REPO_PATH/libs/deepagents"
 QUICKJS_PKG="$REPO_PATH/libs/providers/quickjs"
 
-# --- Step 2: Scaffold the quickstart directory ---
+# --- Step 2: Scaffold into this directory ---
 
 echo ""
-echo "Creating quickstart at $OUT_DIR..."
-mkdir -p "$OUT_DIR"
+echo "Setting up quickstart in $SCRIPT_DIR..."
 
 # package.json
-cat > "$OUT_DIR/package.json" <<'PKGJSON'
+cat > "$SCRIPT_DIR/package.json" <<'PKGJSON'
 {
   "name": "swarm-quickstart",
   "private": true,
@@ -105,15 +101,15 @@ PKGJSON
 
 # Replace link placeholders with actual paths
 if [[ "$(uname)" == "Darwin" ]]; then
-  sed -i '' "s|DEEPAGENTS_LINK|link:$DEEPAGENTS_PKG|g" "$OUT_DIR/package.json"
-  sed -i '' "s|QUICKJS_LINK|link:$QUICKJS_PKG|g" "$OUT_DIR/package.json"
+  sed -i '' "s|DEEPAGENTS_LINK|link:$DEEPAGENTS_PKG|g" "$SCRIPT_DIR/package.json"
+  sed -i '' "s|QUICKJS_LINK|link:$QUICKJS_PKG|g" "$SCRIPT_DIR/package.json"
 else
-  sed -i "s|DEEPAGENTS_LINK|link:$DEEPAGENTS_PKG|g" "$OUT_DIR/package.json"
-  sed -i "s|QUICKJS_LINK|link:$QUICKJS_PKG|g" "$OUT_DIR/package.json"
+  sed -i "s|DEEPAGENTS_LINK|link:$DEEPAGENTS_PKG|g" "$SCRIPT_DIR/package.json"
+  sed -i "s|QUICKJS_LINK|link:$QUICKJS_PKG|g" "$SCRIPT_DIR/package.json"
 fi
 
 # .env
-cat > "$OUT_DIR/.env" <<'DOTENV'
+cat > "$SCRIPT_DIR/.env" <<'DOTENV'
 ANTHROPIC_API_KEY=""
 TAVILY_API_KEY=""
 
@@ -125,7 +121,7 @@ TAVILY_API_KEY=""
 DOTENV
 
 # tsconfig.json
-cat > "$OUT_DIR/tsconfig.json" <<'TSCONFIG'
+cat > "$SCRIPT_DIR/tsconfig.json" <<'TSCONFIG'
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -140,7 +136,7 @@ TSCONFIG
 
 # --- Step 3: Write example files ---
 
-cat > "$OUT_DIR/01-sentiment-classification.ts" <<'EXAMPLE1'
+cat > "$SCRIPT_DIR/01-sentiment-classification.ts" <<'EXAMPLE1'
 /**
  * 01 — Sentiment Classification (invoke mode, single pass)
  *
@@ -198,7 +194,7 @@ const last = result.messages[result.messages.length - 1];
 console.log(typeof last.content === "string" ? last.content : JSON.stringify(last.content));
 EXAMPLE1
 
-cat > "$OUT_DIR/02-file-review.ts" <<'EXAMPLE2'
+cat > "$SCRIPT_DIR/02-file-review.ts" <<'EXAMPLE2'
 /**
  * 02 — File Review (agent mode with tools)
  *
@@ -260,7 +256,7 @@ const last = result.messages[result.messages.length - 1];
 console.log(typeof last.content === "string" ? last.content : JSON.stringify(last.content));
 EXAMPLE2
 
-cat > "$OUT_DIR/03-multi-pass-pipeline.ts" <<'EXAMPLE3'
+cat > "$SCRIPT_DIR/03-multi-pass-pipeline.ts" <<'EXAMPLE3'
 /**
  * 03 — Multi-Pass Pipeline (review, verify, filter)
  *
@@ -343,22 +339,19 @@ EXAMPLE3
 
 echo ""
 echo "Installing dependencies..."
-cd "$OUT_DIR"
+cd "$SCRIPT_DIR"
 pnpm install
 
 # --- Done ---
 
 echo ""
 echo "============================================"
-echo "  Swarm Quick Start ready!"
+echo "  Quickstart ready!"
 echo "============================================"
 echo ""
-echo "  Directory: $OUT_DIR"
-echo ""
 echo "  Next steps:"
-echo "    1. cd $OUT_DIR"
-echo "    2. Edit .env and add your API keys"
-echo "    3. Run an example:"
+echo "    1. Edit .env and add your API keys"
+echo "    2. Run an example:"
 echo "       npx tsx 01-sentiment-classification.ts"
 echo "       npx tsx 02-file-review.ts"
 echo "       npx tsx 03-multi-pass-pipeline.ts"
