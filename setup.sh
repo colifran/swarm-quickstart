@@ -181,10 +181,7 @@ import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 
 const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
-const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-6",
-  subagents: [],
-});
+const swarmLib = swarm();
 
 const agent = createDeepAgent({
   model,
@@ -243,8 +240,10 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
-const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-6",
+const swarmLib = swarm();
+
+const agent = createDeepAgent({
+  model,
   subagents: [
     {
       name: "reviewer",
@@ -253,10 +252,6 @@ const swarmLib = swarm({
         "You are a code reviewer. Find real bugs — race conditions, resource leaks, injection vectors, error handling gaps. Cite line numbers. Ignore style issues.",
     },
   ],
-});
-
-const agent = createDeepAgent({
-  model,
   backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
   middleware: [
     createCodeInterpreterMiddleware({
@@ -307,8 +302,10 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
-const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-6",
+const swarmLib = swarm();
+
+const agent = createDeepAgent({
+  model,
   subagents: [
     {
       name: "bug-finder",
@@ -323,10 +320,6 @@ const swarmLib = swarm({
         "Determine if a reported bug is REAL or a FALSE POSITIVE. Check the code for guards or constraints that prevent the issue. Default to false positive unless you have concrete evidence.",
     },
   ],
-});
-
-const agent = createDeepAgent({
-  model,
   backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
   middleware: [
     createCodeInterpreterMiddleware({
@@ -548,9 +541,20 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
-// Built-in swarm library with bug-finder and verifier subagents
-const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-6",
+const swarmLib = swarm();
+
+// Custom code-auditor library — imports swarm internally and exposes audit()
+const libDir = path.join(__dirname, "libraries", "code-auditor");
+const codeAuditorLib: InterpreterLibrary = {
+  name: "code-auditor",
+  description: "Two-pass code audit pipeline built on swarm",
+  ptcTools: ["write_file"],
+  source: fs.readFileSync(path.join(libDir, "index.ts"), "utf-8"),
+  instructions: fs.readFileSync(path.join(libDir, "INSTRUCTIONS.md"), "utf-8"),
+};
+
+const agent = createDeepAgent({
+  model,
   subagents: [
     {
       name: "bug-finder",
@@ -565,20 +569,6 @@ const swarmLib = swarm({
         "Determine if a reported bug is REAL or a FALSE POSITIVE. Check the code for guards or constraints that prevent the issue. Default to false positive unless you have concrete evidence.",
     },
   ],
-});
-
-// Custom code-auditor library — imports swarm internally and exposes audit()
-const libDir = path.join(__dirname, "libraries", "code-auditor");
-const codeAuditorLib: InterpreterLibrary = {
-  name: "code-auditor",
-  description: "Two-pass code audit pipeline built on swarm",
-  ptcTools: ["write_file"],
-  source: fs.readFileSync(path.join(libDir, "index.ts"), "utf-8"),
-  instructions: fs.readFileSync(path.join(libDir, "INSTRUCTIONS.md"), "utf-8"),
-};
-
-const agent = createDeepAgent({
-  model,
   backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
   middleware: [
     createCodeInterpreterMiddleware({
