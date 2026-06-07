@@ -1,13 +1,22 @@
 # Swarm Quick Start
 
-Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) project running in one command. The setup script builds deepagentsjs and scaffolds example files directly into this directory.
+Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) project running in one command. The setup script builds deepagentsjs, copies real source files into `sample-code/` for the examples to review, and scaffolds everything into this directory.
+
+## Documentation
+
+Familiarize yourself with the docs before diving into the examples — they cover the core concepts behind interpreter libraries and swarm that these examples build on.
+
+- [Interpreter Libraries](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/interpreters#interpreter-libraries) — How to package reusable capabilities that agents can import, and how libraries compose on top of each other.
+- [Swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) — The table-based data model for parallel task fan-out, batching, dispatch modes, and patterns.
+
+For a more complex example where a custom `evaluator` library imports swarm internally to build a multi-pass evaluation pipeline, see `examples/repl/interpreter-libraries/` in the deepagentsjs repo.
 
 ## Prerequisites
 
 - Node.js 20+
 - pnpm 10+
 - An Anthropic API key
-- A Tavily API key (optional, needed for examples 02 and 03)
+- A Tavily API key (optional, needed for examples 02, 03, and 04)
 
 ## Setup
 
@@ -51,32 +60,40 @@ The simplest swarm example. Creates a table from inline records, classifies sent
 
 **Only needs:** `ANTHROPIC_API_KEY`
 
-### 02 — File Review
+### 02 — Multi-Perspective Code Review
 
-Creates a table from TypeScript files via glob, dispatches each to a `reviewer` subagent with Tavily search, and reads back flagged files.
+Reviews ~20 real TypeScript source files from the deepagents backends and middleware layers. Each file is dispatched to three specialized subagent types — security, performance, and correctness — across three sequential passes. Results are aggregated into a summary with top findings.
 
 **What it demonstrates:**
-- `create` with `glob`
-- `subagentType` for agent mode dispatch (full agentic loop with tools)
-- `context` (shared background) vs `instruction` (per-row template)
+- `create` with `glob` over a real codebase
+- Multiple subagent types with distinct system prompts
+- Multiple `run` passes over the same table
+- `responseSchema` for structured findings
+- Cross-pass aggregation
 
 **Needs:** `ANTHROPIC_API_KEY` and `TAVILY_API_KEY`
 
-### 03 — Multi-Pass Pipeline
+### 03 — Review, Verify, and Filter
 
-The review-verify-filter pattern. Pass 1 reviews files with a `reviewer` subagent. Findings are flattened into a new table. Pass 2 verifies each finding with a `verifier` subagent. Only confirmed findings are returned.
+The review-verify-filter pattern applied to real code. Pass 1 fans out files to a bug-finder subagent. Pass 2 flattens all reported findings into a new table and dispatches each to a skeptical verifier. Only confirmed findings survive the filter.
 
 **What it demonstrates:**
 - Multiple tables in one pipeline
-- Different subagent types per pass
+- Flattening results from one table into a new table
+- Different subagent types per pass (finder vs verifier)
 - Filtering on structured output columns
-- Structured accumulation across passes
+- False positive elimination
 
 **Needs:** `ANTHROPIC_API_KEY` and `TAVILY_API_KEY`
 
-## Documentation
+### 04 — Custom Interpreter Library
 
-- [Swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/swarm) — Full API reference, batching details, and more patterns.
-- [Interpreter Libraries](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed8717.mintlify.app/oss/javascript/deepagents/interpreters#interpreter-libraries) — Build custom libraries that compose on top of swarm.
+Shows how to compose a higher-level abstraction on top of swarm. A custom `code-auditor` library in `libraries/code-auditor/` imports swarm internally and exposes a single `audit()` function. The agent just calls `audit({ glob: "sample-code/**/*.ts" })` — it doesn't need to know about tables, dispatches, or multi-pass flows.
 
-For a more complex example where a custom `evaluator` library imports swarm internally to build a multi-pass evaluation pipeline, see `examples/repl/interpreter-libraries/` in the deepagentsjs repo.
+**What it demonstrates:**
+- Building a custom `InterpreterLibrary` with source, instructions, and PTC tools
+- Library-to-library composition (code-auditor imports swarm)
+- Encapsulating a multi-pass pipeline behind a simple API
+- Writing structured results to the filesystem via PTC
+
+**Needs:** `ANTHROPIC_API_KEY` and `TAVILY_API_KEY`

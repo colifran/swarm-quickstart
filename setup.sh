@@ -134,7 +134,34 @@ cat > "$SCRIPT_DIR/tsconfig.json" <<'TSCONFIG'
 }
 TSCONFIG
 
-# --- Step 3: Write example files ---
+# --- Step 3: Copy sample code from deepagentsjs ---
+
+echo "Copying sample code from deepagentsjs..."
+SAMPLE_DIR="$SCRIPT_DIR/sample-code"
+mkdir -p "$SAMPLE_DIR/backends" "$SAMPLE_DIR/middleware"
+
+# Copy non-test source files from backends and middleware
+for f in "$REPO_PATH/libs/deepagents/src/backends/"*.ts; do
+  basename="$(basename "$f")"
+  case "$basename" in
+    *.test.* | *.int.test.*) continue ;;
+    index.ts) continue ;;
+    *) cp "$f" "$SAMPLE_DIR/backends/" ;;
+  esac
+done
+
+for f in "$REPO_PATH/libs/deepagents/src/middleware/"*.ts; do
+  basename="$(basename "$f")"
+  case "$basename" in
+    *.test.* | *.int.test.*) continue ;;
+    index.ts | test.ts | types.ts) continue ;;
+    *) cp "$f" "$SAMPLE_DIR/middleware/" ;;
+  esac
+done
+
+echo "  Copied $(find "$SAMPLE_DIR" -name '*.ts' | wc -l | tr -d ' ') files to sample-code/"
+
+# --- Step 4: Write example files ---
 
 cat > "$SCRIPT_DIR/01-sentiment-classification.ts" <<'EXAMPLE1'
 /**
@@ -194,17 +221,16 @@ const last = result.messages[result.messages.length - 1];
 console.log(typeof last.content === "string" ? last.content : JSON.stringify(last.content));
 EXAMPLE1
 
-cat > "$SCRIPT_DIR/02-file-review.ts" <<'EXAMPLE2'
+cat > "$SCRIPT_DIR/02-code-review.ts" <<'EXAMPLE2'
 /**
- * 02 — File Review (agent mode with tools)
+ * 02 — Multi-Perspective Code Review (agent mode, multiple subagent types)
  *
- * Creates a table from TypeScript files, dispatches each to a reviewer
- * subagent with web search tools, and reads back flagged files.
+ * Reviews the sample-code/ directory — real TypeScript source files from the
+ * deepagents backends and middleware layers. Each file is dispatched to three
+ * specialized reviewer subagents in parallel: security, performance, and
+ * correctness.
  *
- * This example reviews its own directory. Point the glob at your own
- * codebase for a real review.
- *
- * Usage: npx tsx 02-file-review.ts
+ * Usage: npx tsx 02-code-review.ts
  */
 import "dotenv/config";
 import { HumanMessage } from "@langchain/core/messages";
@@ -219,13 +245,40 @@ const swarmLib = swarm({
   defaultModel: "anthropic:claude-sonnet-4-20250514",
   subagents: [
     {
-      name: "reviewer",
-      description: "Reviews code files for quality issues",
-      systemPrompt: `You are a code reviewer. Review the file for:
-        - Security issues (injection, auth bypass, path traversal)
-        - Performance problems (unnecessary allocations, O(n²) loops)
-        - Error handling gaps
-        Be specific about line numbers and suggest fixes.`,
+      name: "security-reviewer",
+      description: "Reviews code for security vulnerabilities",
+      systemPrompt: `You are a security-focused code reviewer. Look for:
+        - Command injection and path traversal
+        - Unsafe deserialization or eval usage
+        - Auth and permission bypass vectors
+        - Information leakage through error messages or logs
+        - Missing input validation at trust boundaries
+        Be specific: cite line numbers, explain the attack vector, suggest a fix.`,
+      tools: [new TavilySearch({ maxResults: 2 })],
+    },
+    {
+      name: "performance-reviewer",
+      description: "Reviews code for performance issues",
+      systemPrompt: `You are a performance-focused code reviewer. Look for:
+        - Unnecessary allocations in hot paths
+        - O(n²) or worse algorithms where O(n) is possible
+        - Missing caching for repeated expensive operations
+        - Blocking I/O that could be parallelized
+        - Memory leaks from unclosed resources or unbounded collections
+        Be specific: cite line numbers, estimate the impact, suggest a fix.`,
+      tools: [new TavilySearch({ maxResults: 2 })],
+    },
+    {
+      name: "correctness-reviewer",
+      description: "Reviews code for logic bugs and correctness issues",
+      systemPrompt: `You are a correctness-focused code reviewer. Look for:
+        - Race conditions and concurrency bugs
+        - Off-by-one errors and boundary conditions
+        - Unhandled error paths that silently swallow failures
+        - Type coercion bugs or incorrect null/undefined handling
+        - Logic errors where code doesn't match its intent
+        Do not report style issues. Only report real bugs that would cause
+        incorrect behavior. Cite line numbers and explain the failure scenario.`,
       tools: [new TavilySearch({ maxResults: 2 })],
     },
   ],
@@ -244,10 +297,23 @@ const agent = createDeepAgent({
 const result = await agent.invoke({
   messages: [
     new HumanMessage(
-      `Review all .ts files in the current directory using swarm.
-      Use the "reviewer" subagent type and provide context that these are
-      TypeScript examples using the Deep Agents framework.
-      Summarize findings by severity.`
+      `Review the TypeScript files in sample-code/ using swarm.
+
+      These are backend and middleware modules from an AI agent framework.
+      The backends/ directory has execution backends (shell, sandbox, filesystem).
+      The middleware/ directory has agent middleware (subagents, memory, caching, summarization).
+
+      Create a swarm table from the .ts files in sample-code/backends/ and sample-code/middleware/
+      using glob. Use the "security-reviewer" subagent type first, then run a second pass
+      with "performance-reviewer", and a third pass with "correctness-reviewer".
+
+      For each pass, use a response schema with a "findings" array where each finding has:
+      title, description, severity (critical/high/medium/low), and category.
+
+      After all three passes, aggregate findings across all passes and give me:
+      1. A summary table of findings by severity and category
+      2. The top 5 most critical findings with details
+      3. Files with the most issues`
     ),
   ],
 });
@@ -256,19 +322,17 @@ const last = result.messages[result.messages.length - 1];
 console.log(typeof last.content === "string" ? last.content : JSON.stringify(last.content));
 EXAMPLE2
 
-cat > "$SCRIPT_DIR/03-multi-pass-pipeline.ts" <<'EXAMPLE3'
+cat > "$SCRIPT_DIR/03-review-verify-filter.ts" <<'EXAMPLE3'
 /**
- * 03 — Multi-Pass Pipeline (review, verify, filter)
+ * 03 — Review, Verify, and Filter (multi-pass pipeline)
  *
- * Demonstrates the core swarm pattern for high-confidence analysis:
- *   Pass 1: Review files with one subagent type
- *   Pass 2: Verify each finding with a different subagent type
- *   Filter: Read back only confirmed findings
+ * The review-verify-filter pattern applied to real code. Pass 1 fans out
+ * sample-code/ files to bug-finder subagents. Pass 2 takes every reported
+ * finding, creates a new table, and dispatches each to a skeptical verifier
+ * that independently checks whether the bug is real. Only confirmed findings
+ * survive.
  *
- * This creates two tables — one for files, one for findings — showing
- * how structured results accumulate across passes.
- *
- * Usage: npx tsx 03-multi-pass-pipeline.ts
+ * Usage: npx tsx 03-review-verify-filter.ts
  */
 import "dotenv/config";
 import { HumanMessage } from "@langchain/core/messages";
@@ -283,20 +347,34 @@ const swarmLib = swarm({
   defaultModel: "anthropic:claude-sonnet-4-20250514",
   subagents: [
     {
-      name: "reviewer",
-      description: "Reviews code for bugs and issues",
-      systemPrompt: `You are a bug finder. Review code thoroughly and report
-        concrete bugs with file, title, and description. Do not report style
-        issues — only real bugs that would cause incorrect behavior.`,
+      name: "bug-finder",
+      description: "Finds bugs and potential issues in code",
+      systemPrompt: `You are a thorough bug finder reviewing an AI agent framework.
+        Look for real bugs that would cause incorrect behavior in production:
+        - Race conditions, concurrency issues
+        - Resource leaks (file handles, processes, connections)
+        - Error handling gaps where failures are silently swallowed
+        - Edge cases in parsing, path handling, or state management
+        - Security issues (injection, traversal, privilege escalation)
+        Report each bug with a clear title, the file and line number,
+        a description of the failure scenario, and severity.
+        Do NOT report style issues, naming conventions, or missing docs.`,
       tools: [new TavilySearch({ maxResults: 2 })],
     },
     {
       name: "verifier",
       description: "Independently verifies whether a reported bug is real",
       systemPrompt: `You are a skeptical code verifier. Given a reported bug,
-        determine if it is a real issue or a false positive. Read the actual
-        code and reason carefully. Default to marking things as false positives
-        unless you can confirm the bug with evidence.`,
+        your job is to determine if it is a REAL issue or a FALSE POSITIVE.
+
+        Read the actual code carefully. Consider:
+        - Does the code actually behave the way the bug report claims?
+        - Are there guards, checks, or upstream constraints that prevent the issue?
+        - Could the reported "bug" actually be intentional behavior?
+        - Is the failure scenario realistic in practice?
+
+        Default to marking things as false positives unless you can confirm
+        the bug with concrete evidence from the code.`,
       tools: [new TavilySearch({ maxResults: 2 })],
     },
   ],
@@ -315,18 +393,26 @@ const agent = createDeepAgent({
 const result = await agent.invoke({
   messages: [
     new HumanMessage(
-      `Do a two-pass review of the .ts files in this directory:
+      `Do a two-pass review of the TypeScript files in sample-code/ using swarm.
 
-      Pass 1: Use the "reviewer" subagent to find bugs in each file.
-      Use a response schema with a "findings" array where each finding
-      has title, description, and severity.
+      These are backend and middleware modules from an AI agent framework.
 
-      Then flatten the findings into a new table and run Pass 2:
-      Use the "verifier" subagent to independently check each finding.
-      Use a response schema with "confirmed" (boolean) and "reason" (string).
+      PASS 1 — Find bugs:
+      Create a swarm table from all .ts files in sample-code/backends/ and
+      sample-code/middleware/ using glob. Dispatch each file to the "bug-finder"
+      subagent. Use a response schema with a "findings" array where each finding
+      has: title, file, line, description, and severity (critical/high/medium/low).
 
-      Finally, filter to only confirmed findings and summarize what was
-      real vs what was a false positive.`
+      PASS 2 — Verify findings:
+      Flatten all findings from Pass 1 into a new swarm table (one row per finding).
+      Dispatch each finding to the "verifier" subagent. Use a response schema with:
+      confirmed (boolean), confidence (high/medium/low), and reason (string).
+
+      FINAL — Filter and report:
+      Filter to only confirmed findings. Report:
+      1. How many findings were reported vs how many survived verification
+      2. Each confirmed finding with its verification reasoning
+      3. Which files had the most confirmed issues`
     ),
   ],
 });
@@ -335,7 +421,277 @@ const last = result.messages[result.messages.length - 1];
 console.log(typeof last.content === "string" ? last.content : JSON.stringify(last.content));
 EXAMPLE3
 
-# --- Step 4: Install dependencies ---
+# --- Step 5: Write the custom code-auditor library ---
+
+mkdir -p "$SCRIPT_DIR/libraries/code-auditor"
+
+cat > "$SCRIPT_DIR/libraries/code-auditor/index.ts" <<'LIBSOURCE'
+import { create, run, rows } from "swarm";
+
+declare const tools: {
+  writeFile?: (args: { file_path: string; content: string }) => Promise<string>;
+};
+
+interface AuditOptions {
+  glob: string;
+  outputDir?: string;
+}
+
+/**
+ * Run a two-pass code audit: find bugs, then verify each finding.
+ *
+ * Pass 1 dispatches every file to a "bug-finder" subagent.
+ * Pass 2 flattens findings into a new table and dispatches each to a "verifier".
+ * Results are written to outputDir as JSON files.
+ */
+export async function audit(options: AuditOptions): Promise<void> {
+  const outputDir = options.outputDir ?? "/audit";
+
+  // Pass 1 — find bugs
+  const files = await create({ glob: options.glob });
+  await run(files.id, {
+    instruction: "Review {file} for bugs. Report concrete issues only — no style or naming feedback.",
+    subagentType: "bug-finder",
+    responseSchema: {
+      type: "object",
+      properties: {
+        findings: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              line: { type: "number" },
+              description: { type: "string" },
+              severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
+            },
+            required: ["title", "description", "severity"],
+          },
+        },
+      },
+      required: ["findings"],
+    },
+  });
+
+  // Flatten findings into a new table
+  const fileRows = await rows(files.id);
+  const allFindings: { file: string; title: string; line?: number; description: string; severity: string }[] = [];
+  for (const row of fileRows) {
+    const findings = (row.findings as any[]) ?? [];
+    const file = row.file as string;
+    for (const f of findings) {
+      allFindings.push({ file, ...f });
+    }
+  }
+
+  if (allFindings.length === 0) {
+    console.log("No findings to verify.");
+    await tools.writeFile!({
+      file_path: `${outputDir}/results.json`,
+      content: JSON.stringify({ total: 0, confirmed: 0, findings: [] }, null, 2),
+    });
+    return;
+  }
+
+  // Pass 2 — verify each finding
+  const findingsTable = await create({
+    tasks: allFindings.map((f, i) => ({ id: `f${i}`, ...f })),
+  });
+  await run(findingsTable.id, {
+    instruction:
+      "Verify this reported bug in {file}: {title} — {description}. " +
+      "Is this a real bug or a false positive? Read the code carefully.",
+    subagentType: "verifier",
+    responseSchema: {
+      type: "object",
+      properties: {
+        confirmed: { type: "boolean" },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+        reason: { type: "string" },
+      },
+      required: ["confirmed", "reason"],
+    },
+  });
+
+  // Filter and write results
+  const verifiedRows = await rows(findingsTable.id);
+  const confirmed = verifiedRows.filter((r) => r.confirmed === true);
+  const rejected = verifiedRows.filter((r) => r.confirmed !== true);
+
+  const results = {
+    total: verifiedRows.length,
+    confirmed: confirmed.length,
+    rejected: rejected.length,
+    findings: confirmed.map((r) => ({
+      file: r.file,
+      title: r.title,
+      severity: r.severity,
+      description: r.description,
+      confidence: r.confidence,
+      reason: r.reason,
+    })),
+  };
+
+  await tools.writeFile!({
+    file_path: `${outputDir}/results.json`,
+    content: JSON.stringify(results, null, 2),
+  });
+
+  console.log(
+    `Audit complete: ${confirmed.length}/${verifiedRows.length} findings confirmed. ` +
+    `Results written to ${outputDir}/results.json`
+  );
+}
+LIBSOURCE
+
+cat > "$SCRIPT_DIR/libraries/code-auditor/INSTRUCTIONS.md" <<'LIBINSTRUCTIONS'
+# Code Auditor
+
+Run a two-pass bug audit on a set of files. Built on top of the `swarm`
+library — you don't need to manage tables or dispatches yourself.
+
+## Quick Start
+
+```javascript
+import { audit } from "code-auditor";
+
+await audit({ glob: "sample-code/**/*.ts" });
+
+// Results are written to /audit/results.json
+```
+
+## How It Works
+
+1. **Pass 1 (bug-finder subagent)** — Every file matching the glob is
+   dispatched to a bug-finder that looks for real bugs: race conditions,
+   resource leaks, error handling gaps, security issues.
+
+2. **Pass 2 (verifier subagent)** — Every finding from Pass 1 is
+   flattened into a new table and dispatched to a skeptical verifier
+   that independently checks whether the bug is real.
+
+3. **Output** — Confirmed findings are written to `results.json` with
+   severity, description, and verification reasoning.
+
+## API
+
+### `audit(options)`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `options.glob` | `string` | Glob pattern for files to audit |
+| `options.outputDir` | `string` | Directory for results (default: `/audit`) |
+
+Returns `void`. Results are written to `{outputDir}/results.json`.
+LIBINSTRUCTIONS
+
+cat > "$SCRIPT_DIR/04-custom-library.ts" <<'EXAMPLE4'
+/**
+ * 04 — Custom Interpreter Library (composing on top of swarm)
+ *
+ * Demonstrates how to build a higher-level abstraction as a custom
+ * interpreter library. The "code-auditor" library imports swarm
+ * internally and exposes a single `audit()` function that orchestrates
+ * a two-pass pipeline (find bugs → verify findings) under the hood.
+ *
+ * The agent just calls `audit({ glob: "sample-code/**/*.ts" })` — it
+ * doesn't need to know about tables, dispatches, or multi-pass flows.
+ *
+ * Usage: npx tsx 04-custom-library.ts
+ */
+import "dotenv/config";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as url from "node:url";
+import { HumanMessage } from "@langchain/core/messages";
+import { ChatAnthropic } from "@langchain/anthropic";
+import { TavilySearch } from "@langchain/tavily";
+import { createDeepAgent } from "deepagents";
+import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
+import type { InterpreterLibrary } from "@langchain/quickjs";
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+const model = new ChatAnthropic({ model: "claude-sonnet-4-20250514" });
+
+// Built-in swarm library with bug-finder and verifier subagents
+const swarmLib = swarm({
+  defaultModel: "anthropic:claude-sonnet-4-20250514",
+  subagents: [
+    {
+      name: "bug-finder",
+      description: "Finds bugs and potential issues in code",
+      systemPrompt: `You are a thorough bug finder reviewing an AI agent framework.
+        Look for real bugs that would cause incorrect behavior in production:
+        - Race conditions, concurrency issues
+        - Resource leaks (file handles, processes, connections)
+        - Error handling gaps where failures are silently swallowed
+        - Edge cases in parsing, path handling, or state management
+        - Security issues (injection, traversal, privilege escalation)
+        Report each bug with a clear title, the file and line number,
+        a description of the failure scenario, and severity.
+        Do NOT report style issues, naming conventions, or missing docs.`,
+      tools: [new TavilySearch({ maxResults: 2 })],
+    },
+    {
+      name: "verifier",
+      description: "Independently verifies whether a reported bug is real",
+      systemPrompt: `You are a skeptical code verifier. Given a reported bug,
+        your job is to determine if it is a REAL issue or a FALSE POSITIVE.
+
+        Read the actual code carefully. Consider:
+        - Does the code actually behave the way the bug report claims?
+        - Are there guards, checks, or upstream constraints that prevent the issue?
+        - Could the reported "bug" actually be intentional behavior?
+        - Is the failure scenario realistic in practice?
+
+        Default to marking things as false positives unless you can confirm
+        the bug with concrete evidence from the code.`,
+      tools: [new TavilySearch({ maxResults: 2 })],
+    },
+  ],
+});
+
+// Custom code-auditor library — imports swarm internally and exposes audit()
+const libDir = path.join(__dirname, "libraries", "code-auditor");
+const codeAuditorLib: InterpreterLibrary = {
+  name: "code-auditor",
+  description: "Two-pass code audit pipeline built on swarm",
+  ptcTools: ["write_file"],
+  source: fs.readFileSync(path.join(libDir, "index.ts"), "utf-8"),
+  instructions: fs.readFileSync(path.join(libDir, "INSTRUCTIONS.md"), "utf-8"),
+};
+
+const agent = createDeepAgent({
+  model,
+  middleware: [
+    createCodeInterpreterMiddleware({
+      libraries: [swarmLib, codeAuditorLib],
+      executionTimeoutMs: -1,
+    }) as any,
+  ],
+});
+
+const result = await agent.invoke({
+  messages: [
+    new HumanMessage(
+      `Audit the sample code for bugs using the code-auditor library.
+
+      Run: audit({ glob: "sample-code/**/*.ts" })
+
+      Then read /audit/results.json and summarize:
+      1. How many findings were reported vs confirmed
+      2. Each confirmed finding with its file, severity, and verification reasoning
+      3. Your overall assessment of the code quality`
+    ),
+  ],
+});
+
+const last = result.messages[result.messages.length - 1];
+console.log(typeof last.content === "string" ? last.content : JSON.stringify(last.content));
+EXAMPLE4
+
+# --- Step 6: Install dependencies ---
 
 echo ""
 echo "Installing dependencies..."
@@ -349,10 +705,13 @@ echo "============================================"
 echo "  Quickstart ready!"
 echo "============================================"
 echo ""
+echo "  sample-code/ contains $(find "$SAMPLE_DIR" -name '*.ts' | wc -l | tr -d ' ') TypeScript files from deepagentsjs"
+echo ""
 echo "  Next steps:"
 echo "    1. Edit .env and add your API keys"
 echo "    2. Run an example:"
 echo "       npx tsx 01-sentiment-classification.ts"
-echo "       npx tsx 02-file-review.ts"
-echo "       npx tsx 03-multi-pass-pipeline.ts"
+echo "       npx tsx 02-code-review.ts"
+echo "       npx tsx 03-review-verify-filter.ts"
+echo "       npx tsx 04-custom-library.ts"
 echo ""
