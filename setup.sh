@@ -234,12 +234,24 @@ const swarmLib = swarm();
 
 const agent = createDeepAgent({
   model,
+  systemPrompt:
+    "You are a code review orchestrator. Before dispatching work with swarm:\n" +
+    "1. Read a representative file to understand the codebase conventions.\n" +
+    "2. Write specific instructions and context for each dispatch — tell subagents exactly what to look for and what NOT to do.\n" +
+    "3. Run a single pipeline — do not create multiple tables or re-dispatch the same files.\n" +
+    "4. After the pipeline completes, summarize results. Do not re-read files the subagents already reviewed.",
   subagents: [
     {
       name: "reviewer",
       description: "Reviews code for bugs and security issues",
       systemPrompt:
-        "You are a code reviewer. Find real bugs — race conditions, resource leaks, injection vectors, error handling gaps. Cite line numbers. Ignore style issues.",
+        "You review code for bugs. Focus on: race conditions, resource leaks, " +
+        "injection vectors, missing error handling, incorrect async patterns. " +
+        "Cite line numbers. Ignore style and naming.\n\n" +
+        "Rules:\n" +
+        "- Read only the file you are assigned. Do not grep, trace imports, or explore other files.\n" +
+        "- Produce your findings after reading the file — do not iterate.\n" +
+        "- If a potential issue depends on external behavior, note it as an assumption.",
     },
   ],
   backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
@@ -254,12 +266,14 @@ const agent = createDeepAgent({
 const result = await agent.invoke({
   messages: [
     new HumanMessage(
-      `Review the TypeScript files in sample-code/ using swarm.
+      `Review the TypeScript backend files in sample-code/ for real bugs using swarm.
 
-      Create a table from the .ts files using glob ("sample-code/**/*.ts"),
-      dispatch each to the "reviewer" subagent with a response schema for
-      findings (title, file, severity, description), then summarize the
-      top issues by severity.`
+      These files are backend modules for an AI agent framework — they handle
+      filesystem operations, code execution sandboxing, and agent lifecycle
+      management. Focus on issues that could cause data loss, security
+      vulnerabilities, or resource leaks in a long-running server process.
+
+      Use the reviewer subagent. Summarize the top findings by severity.`
     ),
   ],
 });
@@ -296,18 +310,36 @@ const swarmLib = swarm();
 
 const agent = createDeepAgent({
   model,
+  systemPrompt:
+    "You are a code audit orchestrator running a two-pass pipeline. Before dispatching:\n" +
+    "1. Read a representative file to understand the codebase conventions.\n" +
+    "2. Write specific instructions and context for each dispatch — tell subagents exactly what to look for and constrain their tool usage.\n" +
+    "3. Run exactly two passes: bug-finder then verifier. Do not add extra passes or re-dispatch files.\n" +
+    "4. After verification, summarize only confirmed findings. Do not re-read files.",
   subagents: [
     {
       name: "bug-finder",
       description: "Finds bugs and potential issues in code",
       systemPrompt:
-        "Find real bugs: race conditions, resource leaks, injection vectors, error handling gaps. Cite line numbers. Ignore style.",
+        "You find bugs in code. Focus on: race conditions, resource leaks, " +
+        "injection vectors, missing error handling, incorrect async patterns. " +
+        "Cite line numbers. Ignore style and naming.\n\n" +
+        "Rules:\n" +
+        "- Read only the file you are assigned. Do not grep, trace imports, or explore other files.\n" +
+        "- Produce your findings after reading the file — do not iterate.\n" +
+        "- If a potential issue depends on external behavior, note it as an assumption.",
     },
     {
       name: "verifier",
       description: "Independently verifies whether a reported bug is real",
       systemPrompt:
-        "Determine if a reported bug is REAL or a FALSE POSITIVE. Check the code for guards or constraints that prevent the issue. Default to false positive unless you have concrete evidence.",
+        "You verify whether reported bugs are real or false positives. " +
+        "Check the code for guards, constraints, or upstream validation that prevent the issue. " +
+        "Default to false positive unless you find concrete evidence.\n\n" +
+        "Rules:\n" +
+        "- Read only the file mentioned in the finding. Do not grep, explore other files, or run code.\n" +
+        "- Produce your verdict after reading the file — do not iterate.\n" +
+        "- One file, one read, one answer.",
     },
   ],
   backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
@@ -322,15 +354,17 @@ const agent = createDeepAgent({
 const result = await agent.invoke({
   messages: [
     new HumanMessage(
-      `Two-pass review of sample-code/**/*.ts using swarm.
+      `Do a thorough two-pass bug audit of the TypeScript files in sample-code/ using swarm.
 
-      Pass 1: glob the files into a table, dispatch each to "bug-finder" with
-      a findings schema (title, file, severity, description).
+      These are backend modules for an AI agent framework — filesystem
+      operations, code execution, and agent lifecycle. Look for bugs that
+      could cause data loss, security issues, or resource leaks.
 
-      Pass 2: flatten all findings into a new table, dispatch each to "verifier"
-      with a verdict schema (confirmed boolean, reason).
+      Pass 1: dispatch each file to bug-finder for initial findings.
+      Pass 2: take every finding from pass 1 and dispatch to verifier to
+      independently confirm or reject it. Only report confirmed findings.
 
-      Filter to confirmed findings and summarize what survived.`
+      Summarize what survived verification.`
     ),
   ],
 });
@@ -347,28 +381,60 @@ cat > "$SCRIPT_DIR/libraries/code-auditor/index.ts" <<'LIBSOURCE'
 import { create, run, rows } from "swarm";
 
 declare const tools: {
+  readFile?: (args: { file_path: string }) => Promise<string>;
   writeFile?: (args: { file_path: string; content: string }) => Promise<string>;
 };
 
 interface AuditOptions {
   glob: string;
+  context?: string;
   outputDir?: string;
 }
 
 /**
  * Run a two-pass code audit: find bugs, then verify each finding.
  *
- * Pass 1 dispatches every file to a "bug-finder" subagent.
- * Pass 2 flattens findings into a new table and dispatches each to a "verifier".
- * Results are written to outputDir as JSON files.
+ * Pass 1 dispatches every file to a "bug-finder" subagent with project
+ * context so it knows what to look for.
+ * Pass 2 flattens findings into a new table and dispatches each to a
+ * "verifier" that reads the relevant file and confirms or rejects.
+ * Results are written to outputDir as JSON.
  */
 export async function audit(options: AuditOptions): Promise<void> {
   const outputDir = options.outputDir ?? "/audit";
+  const projectContext = options.context ?? "";
 
-  // Pass 1 — find bugs
+  // Scope the work — read a representative file to understand conventions
   const files = await create({ glob: options.glob });
+  const sampleRows = await rows(files.id, { limit: 1 });
+  let conventionNotes = "";
+  if (sampleRows.length > 0) {
+    const sample = await tools.readFile!({ file_path: sampleRows[0].file as string });
+    const lines = sample.split("\n");
+    conventionNotes =
+      `The codebase uses TypeScript. Sample file (${sampleRows[0].file}) ` +
+      `is ${lines.length} lines. `;
+    if (sample.includes("import")) {
+      const imports = lines.filter((l: string) => l.startsWith("import ")).slice(0, 5);
+      conventionNotes += `Key imports: ${imports.join("; ")}. `;
+    }
+  }
+
+  // Pass 1 — find bugs with informed context
+  const bugFinderContext =
+    `${projectContext ? projectContext + " " : ""}` +
+    `${conventionNotes}` +
+    `Analyze only the dispatched file. Do not read imports, trace ` +
+    `dependencies, or grep the codebase. If a finding depends on ` +
+    `external behavior, note it as an assumption. Produce your ` +
+    `findings after reading the file.`;
+
   await run(files.id, {
-    instruction: "Review {file} for bugs. Report concrete issues only — no style or naming feedback.",
+    instruction:
+      "Find concrete bugs in {file}: race conditions, resource leaks, " +
+      "injection vectors, missing error handling, incorrect async patterns. " +
+      "Cite line numbers. Ignore style, naming, and documentation gaps.",
+    context: bugFinderContext,
     subagentType: "bug-finder",
     responseSchema: {
       type: "object",
@@ -411,14 +477,19 @@ export async function audit(options: AuditOptions): Promise<void> {
     return;
   }
 
-  // Pass 2 — verify each finding
+  // Pass 2 — verify each finding with tight scope
   const findingsTable = await create({
     tasks: allFindings.map((f, i) => ({ id: `f${i}`, ...f })),
   });
   await run(findingsTable.id, {
     instruction:
-      "Verify this reported bug in {file}: {title} — {description}. " +
-      "Is this a real bug or a false positive? Read the code carefully.",
+      'Verify this reported bug in {file} (line {line}): "{title}" — {description}. ' +
+      "Is this a real bug or a false positive?",
+    context:
+      "Read only the file mentioned in the finding. Check whether guards, " +
+      "constraints, or upstream validation prevent the reported issue. " +
+      "Do not grep, explore other files, or run code. Default to false " +
+      "positive unless you find concrete evidence the bug is real.",
     subagentType: "verifier",
     responseSchema: {
       type: "object",
@@ -473,22 +544,30 @@ library — you don't need to manage tables or dispatches yourself.
 ```javascript
 import { audit } from "code-auditor";
 
-await audit({ glob: "sample-code/**/*.ts" });
+await audit({
+  glob: "src/**/*.ts",
+  context:
+    "Express + Knex backend. Auth middleware is at the router level. " +
+    "Focus on injection, resource leaks, and missing error handling.",
+});
 
 // Results are written to /audit/results.json
 ```
 
 ## How It Works
 
-1. **Pass 1 (bug-finder subagent)** — Every file matching the glob is
-   dispatched to a bug-finder that looks for real bugs: race conditions,
-   resource leaks, error handling gaps, security issues.
+1. **Scoping** — Reads a representative file to understand patterns and
+   conventions, then builds informed context for subagents.
 
-2. **Pass 2 (verifier subagent)** — Every finding from Pass 1 is
+2. **Pass 1 (bug-finder subagent)** — Every file matching the glob is
+   dispatched to a bug-finder with specific instructions and project
+   context. Subagents analyze only their dispatched file.
+
+3. **Pass 2 (verifier subagent)** — Every finding from Pass 1 is
    flattened into a new table and dispatched to a skeptical verifier
-   that independently checks whether the bug is real.
+   that reads only the relevant file and confirms or rejects.
 
-3. **Output** — Confirmed findings are written to `results.json` with
+4. **Output** — Confirmed findings are written to `results.json` with
    severity, description, and verification reasoning.
 
 ## API
@@ -498,9 +577,32 @@ await audit({ glob: "sample-code/**/*.ts" });
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `options.glob` | `string` | Glob pattern for files to audit |
-| `options.outputDir` | `string` | Directory for results (default: `/audit`) |
+| `options.context` | `string?` | Project context — stack, patterns, what to focus on |
+| `options.outputDir` | `string?` | Directory for results (default: `/audit`) |
 
 Returns `void`. Results are written to `{outputDir}/results.json`.
+
+## Writing Good Context
+
+The `context` parameter is the most important lever for audit quality
+and cost. Tell the auditor what stack you're using, what patterns to
+look for, and what to ignore. Without context, subagents waste
+iterations rediscovering your project's conventions.
+
+```javascript
+// Bad — subagents guess at everything
+await audit({ glob: "src/**/*.ts" });
+
+// Good — subagents know the stack and focus areas
+await audit({
+  glob: "src/**/*.ts",
+  context:
+    "This is a Node.js API using Fastify and Prisma. " +
+    "Auth uses JWT with middleware on route groups. " +
+    "Focus on SQL injection via raw queries, unvalidated " +
+    "user input, and missing error handling in async routes.",
+});
+```
 LIBINSTRUCTIONS
 
 cat > "$SCRIPT_DIR/04-custom-library.ts" <<'EXAMPLE4'
@@ -545,18 +647,36 @@ const codeAuditorLib: InterpreterLibrary = {
 
 const agent = createDeepAgent({
   model,
+  systemPrompt:
+    "You are a code audit orchestrator. Use the code-auditor library to run audits.\n" +
+    "1. Understand the project context before calling audit() — read a sample file if needed.\n" +
+    "2. Pass meaningful context to audit() so subagents know the stack and what to focus on.\n" +
+    "3. Run a single audit() call. Do not call it multiple times or re-dispatch files.\n" +
+    "4. After the audit completes, read the results file and summarize. Do not re-read source files.",
   subagents: [
     {
       name: "bug-finder",
       description: "Finds bugs and potential issues in code",
       systemPrompt:
-        "Find real bugs: race conditions, resource leaks, injection vectors, error handling gaps. Cite line numbers. Ignore style.",
+        "You find bugs in code. Focus on: race conditions, resource leaks, " +
+        "injection vectors, missing error handling, incorrect async patterns. " +
+        "Cite line numbers. Ignore style and naming.\n\n" +
+        "Rules:\n" +
+        "- Read only the file you are assigned. Do not grep, trace imports, or explore other files.\n" +
+        "- Produce your findings after reading the file — do not iterate.\n" +
+        "- If a potential issue depends on external behavior, note it as an assumption.",
     },
     {
       name: "verifier",
       description: "Independently verifies whether a reported bug is real",
       systemPrompt:
-        "Determine if a reported bug is REAL or a FALSE POSITIVE. Check the code for guards or constraints that prevent the issue. Default to false positive unless you have concrete evidence.",
+        "You verify whether reported bugs are real or false positives. " +
+        "Check the code for guards, constraints, or upstream validation that prevent the issue. " +
+        "Default to false positive unless you find concrete evidence.\n\n" +
+        "Rules:\n" +
+        "- Read only the file mentioned in the finding. Do not grep, explore other files, or run code.\n" +
+        "- Produce your verdict after reading the file — do not iterate.\n" +
+        "- One file, one read, one answer.",
     },
   ],
   backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
@@ -573,7 +693,13 @@ const result = await agent.invoke({
     new HumanMessage(
       `Audit the sample code for bugs using the code-auditor library.
 
-      Run: audit({ glob: "sample-code/**/*.ts" })
+      These are backend modules for an AI agent framework — they handle
+      filesystem operations, code execution sandboxing, and agent lifecycle
+      management. The code runs in long-lived server processes.
+
+      Run audit() with a glob for the sample-code TypeScript files and
+      provide context about the project so the auditor can write focused
+      subagent prompts.
 
       Then read /audit/results.json and summarize:
       1. How many findings were reported vs confirmed

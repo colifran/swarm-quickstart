@@ -86,12 +86,14 @@ The review-verify-filter pattern applied to real code. Pass 1 fans out files to 
 
 ### 04 — Custom Interpreter Library
 
-Shows how to compose a higher-level abstraction on top of swarm. A custom `code-auditor` library in `libraries/code-auditor/` imports swarm internally and exposes a single `audit()` function. The agent just calls `audit({ glob: "sample-code/backends/*.ts" })` — it doesn't need to know about tables, dispatches, or multi-pass flows.
+Shows how to compose a higher-level abstraction on top of swarm. A custom `code-auditor` library in `libraries/code-auditor/` imports swarm internally and exposes a single `audit()` function. The library handles scoping — it reads a representative file to understand conventions, builds informed context for subagents, and constrains tool usage per dispatch.
 
 **What it demonstrates:**
 - Building a custom `InterpreterLibrary` with source, instructions, and PTC tools
 - Library-to-library composition (code-auditor imports swarm)
 - Encapsulating a multi-pass pipeline behind a simple API
+- Scoping work before dispatch — reading samples, building context
+- Constraining subagent tool usage via `context`
 - Writing structured results to the filesystem via PTC
 
 **Only needs:** `ANTHROPIC_API_KEY`
