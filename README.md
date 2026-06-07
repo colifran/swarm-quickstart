@@ -60,16 +60,15 @@ The simplest swarm example. Creates a table from inline records, classifies sent
 
 **Only needs:** `ANTHROPIC_API_KEY`
 
-### 02 — Multi-Perspective Code Review
+### 02 — Code Review
 
-Reviews ~20 real TypeScript source files from the deepagents backends and middleware layers. Each file is dispatched to three specialized subagent types — security, performance, and correctness — across three sequential passes. Results are aggregated into a summary with top findings.
+Reviews 5 TypeScript backend source files from deepagents. Each file is dispatched to a reviewer subagent with web search, and findings are aggregated by severity.
 
 **What it demonstrates:**
 - `create` with `glob` over a real codebase
-- Multiple subagent types with distinct system prompts
-- Multiple `run` passes over the same table
+- Agent-mode subagents with tools (Tavily web search)
 - `responseSchema` for structured findings
-- Cross-pass aggregation
+- Single-pass aggregation
 
 **Needs:** `ANTHROPIC_API_KEY` and `TAVILY_API_KEY`
 
@@ -88,7 +87,7 @@ The review-verify-filter pattern applied to real code. Pass 1 fans out files to 
 
 ### 04 — Custom Interpreter Library
 
-Shows how to compose a higher-level abstraction on top of swarm. A custom `code-auditor` library in `libraries/code-auditor/` imports swarm internally and exposes a single `audit()` function. The agent just calls `audit({ glob: "sample-code/**/*.ts" })` — it doesn't need to know about tables, dispatches, or multi-pass flows.
+Shows how to compose a higher-level abstraction on top of swarm. A custom `code-auditor` library in `libraries/code-auditor/` imports swarm internally and exposes a single `audit()` function. The agent just calls `audit({ glob: "sample-code/backends/*.ts" })` — it doesn't need to know about tables, dispatches, or multi-pass flows.
 
 **What it demonstrates:**
 - Building a custom `InterpreterLibrary` with source, instructions, and PTC tools
