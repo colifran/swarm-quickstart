@@ -65,8 +65,10 @@ fi
 REPO_PATH="$(cd "$REPO_PATH" && pwd)"
 
 echo "Using repo at $REPO_PATH"
-echo "Building..."
 cd "$REPO_PATH"
+echo "Checking out $BRANCH..."
+git checkout "$BRANCH"
+echo "Building..."
 pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 pnpm build
 

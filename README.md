@@ -12,7 +12,7 @@ Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780798128-0ed87
 ## Setup
 
 ```bash
-git clone https://github.com/langchain-ai/swarm-quickstart.git
+git clone https://github.com/colifran/swarm-quickstart.git
 cd swarm-quickstart
 ```
 
@@ -22,15 +22,13 @@ cd swarm-quickstart
 ./setup.sh --repo /path/to/deepagentsjs
 ```
 
-Make sure you're on the `colifran/interp-libs` branch. The script will build the repo if needed.
-
 ### If you don't have the repo
 
 ```bash
 ./setup.sh --clone
 ```
 
-This clones deepagentsjs to `~/.swarm-quickstart-repo`, checks out the right branch, and builds.
+Both options automatically check out the `colifran/interp-libs` branch and build.
 
 ### Custom output directory
 
