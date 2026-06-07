@@ -86,6 +86,7 @@ cat > "$SCRIPT_DIR/package.json" <<'PKGJSON'
   "dependencies": {
     "deepagents": "DEEPAGENTS_LINK",
     "@langchain/quickjs": "QUICKJS_LINK",
+    "@langchain/core": "^1.1.44",
     "@langchain/anthropic": "^1.3.26",
     "@langchain/tavily": "^1.2.0",
     "dotenv": "^17.2.4",
@@ -176,13 +177,13 @@ cat > "$SCRIPT_DIR/01-sentiment-classification.ts" <<'EXAMPLE1'
 import "dotenv/config";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { createDeepAgent } from "deepagents";
+import { createDeepAgent, LocalShellBackend } from "deepagents";
 import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 
-const model = new ChatAnthropic({ model: "claude-sonnet-4-20250514" });
+const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
 const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-20250514",
+  defaultModel: "anthropic:claude-sonnet-4-6",
   subagents: [],
 });
 
@@ -233,16 +234,20 @@ cat > "$SCRIPT_DIR/02-code-review.ts" <<'EXAMPLE2'
  * Usage: npx tsx 02-code-review.ts
  */
 import "dotenv/config";
+import * as path from "node:path";
+import * as url from "node:url";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { TavilySearch } from "@langchain/tavily";
-import { createDeepAgent } from "deepagents";
+import { createDeepAgent, LocalShellBackend } from "deepagents";
 import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 
-const model = new ChatAnthropic({ model: "claude-sonnet-4-20250514" });
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
 const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-20250514",
+  defaultModel: "anthropic:claude-sonnet-4-6",
   subagents: [
     {
       name: "security-reviewer",
@@ -286,6 +291,7 @@ const swarmLib = swarm({
 
 const agent = createDeepAgent({
   model,
+  backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
   middleware: [
     createCodeInterpreterMiddleware({
       libraries: [swarmLib],
@@ -335,16 +341,20 @@ cat > "$SCRIPT_DIR/03-review-verify-filter.ts" <<'EXAMPLE3'
  * Usage: npx tsx 03-review-verify-filter.ts
  */
 import "dotenv/config";
+import * as path from "node:path";
+import * as url from "node:url";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { TavilySearch } from "@langchain/tavily";
-import { createDeepAgent } from "deepagents";
+import { createDeepAgent, LocalShellBackend } from "deepagents";
 import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 
-const model = new ChatAnthropic({ model: "claude-sonnet-4-20250514" });
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
 const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-20250514",
+  defaultModel: "anthropic:claude-sonnet-4-6",
   subagents: [
     {
       name: "bug-finder",
@@ -382,6 +392,7 @@ const swarmLib = swarm({
 
 const agent = createDeepAgent({
   model,
+  backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
   middleware: [
     createCodeInterpreterMiddleware({
       libraries: [swarmLib],
@@ -606,17 +617,17 @@ import * as url from "node:url";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { TavilySearch } from "@langchain/tavily";
-import { createDeepAgent } from "deepagents";
+import { createDeepAgent, LocalShellBackend } from "deepagents";
 import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 import type { InterpreterLibrary } from "@langchain/quickjs";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const model = new ChatAnthropic({ model: "claude-sonnet-4-20250514" });
+const model = new ChatAnthropic({ model: "claude-sonnet-4-6" });
 
 // Built-in swarm library with bug-finder and verifier subagents
 const swarmLib = swarm({
-  defaultModel: "anthropic:claude-sonnet-4-20250514",
+  defaultModel: "anthropic:claude-sonnet-4-6",
   subagents: [
     {
       name: "bug-finder",
@@ -664,6 +675,7 @@ const codeAuditorLib: InterpreterLibrary = {
 
 const agent = createDeepAgent({
   model,
+  backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
   middleware: [
     createCodeInterpreterMiddleware({
       libraries: [swarmLib, codeAuditorLib],
