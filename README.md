@@ -16,7 +16,6 @@ For a more complex example where a custom `evaluator` library imports swarm inte
 - Node.js 20+
 - pnpm 10+
 - An Anthropic API key
-- A Tavily API key (optional, needed for examples 02, 03, and 04)
 
 ## Setup
 
@@ -62,15 +61,15 @@ The simplest swarm example. Creates a table from inline records, classifies sent
 
 ### 02 — Code Review
 
-Reviews 5 TypeScript backend source files from deepagents. Each file is dispatched to a reviewer subagent with web search, and findings are aggregated by severity.
+Reviews 5 TypeScript backend source files from deepagents. Each file is dispatched to a reviewer subagent, and findings are aggregated by severity.
 
 **What it demonstrates:**
 - `create` with `glob` over a real codebase
-- Agent-mode subagents with tools (Tavily web search)
+- Agent-mode subagents
 - `responseSchema` for structured findings
 - Single-pass aggregation
 
-**Needs:** `ANTHROPIC_API_KEY` and `TAVILY_API_KEY`
+**Only needs:** `ANTHROPIC_API_KEY`
 
 ### 03 — Review, Verify, and Filter
 
@@ -83,7 +82,7 @@ The review-verify-filter pattern applied to real code. Pass 1 fans out files to 
 - Filtering on structured output columns
 - False positive elimination
 
-**Needs:** `ANTHROPIC_API_KEY` and `TAVILY_API_KEY`
+**Only needs:** `ANTHROPIC_API_KEY`
 
 ### 04 — Custom Interpreter Library
 
@@ -95,4 +94,4 @@ Shows how to compose a higher-level abstraction on top of swarm. A custom `code-
 - Encapsulating a multi-pass pipeline behind a simple API
 - Writing structured results to the filesystem via PTC
 
-**Needs:** `ANTHROPIC_API_KEY` and `TAVILY_API_KEY`
+**Only needs:** `ANTHROPIC_API_KEY`

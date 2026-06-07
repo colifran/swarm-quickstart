@@ -88,7 +88,6 @@ cat > "$SCRIPT_DIR/package.json" <<'PKGJSON'
     "@langchain/quickjs": "QUICKJS_LINK",
     "@langchain/core": "^1.1.44",
     "@langchain/anthropic": "^1.3.26",
-    "@langchain/tavily": "^1.2.0",
     "dotenv": "^17.2.4",
     "dedent": "^1.7.1"
   },
@@ -112,7 +111,6 @@ fi
 # .env
 cat > "$SCRIPT_DIR/.env" <<'DOTENV'
 ANTHROPIC_API_KEY=""
-TAVILY_API_KEY=""
 
 # Optional: LangSmith tracing
 # LANGSMITH_TRACING=true
@@ -227,7 +225,6 @@ import * as path from "node:path";
 import * as url from "node:url";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { TavilySearch } from "@langchain/tavily";
 import { createDeepAgent, LocalShellBackend } from "deepagents";
 import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 
@@ -243,7 +240,6 @@ const swarmLib = swarm({
       description: "Reviews code for bugs and security issues",
       systemPrompt:
         "You are a code reviewer. Find real bugs — race conditions, resource leaks, injection vectors, error handling gaps. Cite line numbers. Ignore style issues.",
-      tools: [new TavilySearch({ maxResults: 2 })],
     },
   ],
 });
@@ -292,7 +288,6 @@ import * as path from "node:path";
 import * as url from "node:url";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { TavilySearch } from "@langchain/tavily";
 import { createDeepAgent, LocalShellBackend } from "deepagents";
 import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 
@@ -308,14 +303,12 @@ const swarmLib = swarm({
       description: "Finds bugs and potential issues in code",
       systemPrompt:
         "Find real bugs: race conditions, resource leaks, injection vectors, error handling gaps. Cite line numbers. Ignore style.",
-      tools: [new TavilySearch({ maxResults: 2 })],
     },
     {
       name: "verifier",
       description: "Independently verifies whether a reported bug is real",
       systemPrompt:
         "Determine if a reported bug is REAL or a FALSE POSITIVE. Check the code for guards or constraints that prevent the issue. Default to false positive unless you have concrete evidence.",
-      tools: [new TavilySearch({ maxResults: 2 })],
     },
   ],
 });
@@ -535,7 +528,6 @@ import * as path from "node:path";
 import * as url from "node:url";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { TavilySearch } from "@langchain/tavily";
 import { createDeepAgent, LocalShellBackend } from "deepagents";
 import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
 import type { InterpreterLibrary } from "@langchain/quickjs";
@@ -553,14 +545,12 @@ const swarmLib = swarm({
       description: "Finds bugs and potential issues in code",
       systemPrompt:
         "Find real bugs: race conditions, resource leaks, injection vectors, error handling gaps. Cite line numbers. Ignore style.",
-      tools: [new TavilySearch({ maxResults: 2 })],
     },
     {
       name: "verifier",
       description: "Independently verifies whether a reported bug is real",
       systemPrompt:
         "Determine if a reported bug is REAL or a FALSE POSITIVE. Check the code for guards or constraints that prevent the issue. Default to false positive unless you have concrete evidence.",
-      tools: [new TavilySearch({ maxResults: 2 })],
     },
   ],
 });
