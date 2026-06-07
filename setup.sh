@@ -116,6 +116,12 @@ fi
 cat > "$OUT_DIR/.env" <<'DOTENV'
 ANTHROPIC_API_KEY=""
 TAVILY_API_KEY=""
+
+# Optional: LangSmith tracing
+# LANGSMITH_TRACING=true
+# LANGSMITH_API_KEY=""
+# LANGSMITH_PROJECT=""
+# LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
 DOTENV
 
 # tsconfig.json
