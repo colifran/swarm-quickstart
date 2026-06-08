@@ -36,7 +36,7 @@ cd swarm-quickstart
 ./setup.sh --clone
 ```
 
-Both options automatically check out the `colifran/interp-libs` branch and build.
+Both options automatically check out the `colifran/workflow-poc` branch and build.
 
 ## Run your first example
 
@@ -95,5 +95,19 @@ Shows how to compose a higher-level abstraction on top of swarm. A custom `code-
 - Scoping work before dispatch — reading samples, building context
 - Constraining subagent tool usage via `context`
 - Writing structured results to the filesystem via PTC
+
+**Only needs:** `ANTHROPIC_API_KEY`
+
+### 05 — Workflows
+
+Demonstrates the full workflow lifecycle: creating, saving, composing, listing, and deleting dynamic workflows. Workflows are code pipelines that the agent writes at runtime via `run_workflow`, which auto-saves them as drafts. Saving a draft promotes it to an interpreter library that can be imported and composed with on future turns.
+
+**What it demonstrates:**
+- `run_workflow` to create and execute a swarm-based pipeline
+- `save_workflow` to promote a draft to a reusable interpreter library
+- Composition — a second workflow imports and calls functions from the saved one
+- `list_workflows` for discovery
+- `delete_workflow` to remove saved workflows
+- Multi-turn conversation with accumulated message history
 
 **Only needs:** `ANTHROPIC_API_KEY`

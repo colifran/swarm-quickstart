@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_PATH=""
 CLONE=false
-BRANCH="colifran/interp-libs"
+BRANCH="colifran/workflow-poc"
 
 usage() {
   cat <<EOF
