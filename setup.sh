@@ -713,6 +713,133 @@ const last = result.messages[result.messages.length - 1];
 console.log(typeof last.content === "string" ? last.content : JSON.stringify(last.content));
 EXAMPLE4
 
+cat > "$SCRIPT_DIR/05-workflows.ts" <<'EXAMPLE5'
+/**
+ * 05 — Workflows (composing and saving reusable pipelines)
+ *
+ * Demonstrates the full workflow lifecycle:
+ *   1. Create a swarm workflow (run_workflow)
+ *   2. Save it as an interpreter library (save_workflow)
+ *   3. Create a second workflow that imports the first (composition)
+ *   4. List all workflows (list_workflows)
+ *   5. Delete a workflow (delete_workflow)
+ *
+ * Usage: npx tsx 05-workflows.ts
+ */
+import "dotenv/config";
+import * as path from "node:path";
+import * as url from "node:url";
+import { HumanMessage } from "@langchain/core/messages";
+import { ChatAnthropic } from "@langchain/anthropic";
+import { createDeepAgent, LocalShellBackend } from "deepagents";
+import { createCodeInterpreterMiddleware, swarm } from "@langchain/quickjs";
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+const model = new ChatAnthropic({ model: "claude-opus-4-6" });
+
+const swarmLib = swarm();
+
+const agent = createDeepAgent({
+  model,
+  systemPrompt:
+    "You are a code review assistant with workflow capabilities.\n" +
+    "When asked to run a workflow, use run_workflow. Keep code minimal.\n" +
+    "IMPORTANT: Write all workflows as exported async functions, then call them.\n" +
+    "When composing, use `import { fn } from 'saved-name'` and call the function.\n" +
+    "Use save_workflow, list_workflows, and delete_workflow when asked.",
+  subagents: [
+    {
+      name: "reviewer",
+      description: "Reviews code for bugs",
+      systemPrompt:
+        "You review code for bugs: race conditions, resource leaks, injection vectors. " +
+        "Cite line numbers. Ignore style.\n\n" +
+        "Rules:\n" +
+        "- Read only the assigned file. Do not grep or explore other files.\n" +
+        "- Produce findings after one read — do not iterate.",
+    },
+  ],
+  backend: () => new LocalShellBackend({ rootDir: __dirname, virtualMode: true }),
+  middleware: [
+    createCodeInterpreterMiddleware({
+      libraries: [swarmLib],
+      enableWorkflows: true,
+      executionTimeoutMs: -1,
+    }) as any,
+  ],
+});
+
+function printReply(result: { messages: { content: string | unknown }[] }) {
+  const last = result.messages[result.messages.length - 1];
+  const text = typeof last.content === "string" ? last.content : JSON.stringify(last.content);
+  console.log(text);
+}
+
+// --- Turn 1: Create a swarm workflow ---
+console.log("\n=== Turn 1: Run a swarm workflow ===\n");
+
+const turn1 = await agent.invoke({
+  messages: [
+    new HumanMessage(
+      "Run a workflow called 'quick-review' that uses swarm to review " +
+      "sample-code/backends/utils.ts and sample-code/backends/sandbox.ts " +
+      "for bugs. Single pass using the reviewer subagent. Return the findings."
+    ),
+  ],
+});
+printReply(turn1);
+
+// --- Turn 2: Save it ---
+console.log("\n=== Turn 2: Save the workflow ===\n");
+
+const turn2 = await agent.invoke({
+  messages: [
+    ...turn1.messages,
+    new HumanMessage("Save that workflow."),
+  ],
+});
+printReply(turn2);
+
+// --- Turn 3: Compose — new workflow that imports the saved one ---
+console.log("\n=== Turn 3: Compose with the saved workflow ===\n");
+
+const turn3 = await agent.invoke({
+  messages: [
+    ...turn2.messages,
+    new HumanMessage(
+      "Run a new workflow called 'review-and-summarize'. " +
+      "Import the quickReview function from 'quick-review' and call it, " +
+      "then count total findings across the returned rows. " +
+      "Return a one-line summary like '3 bugs found across 2 files'."
+    ),
+  ],
+});
+printReply(turn3);
+
+// --- Turn 4: List workflows ---
+console.log("\n=== Turn 4: List workflows ===\n");
+
+const turn4 = await agent.invoke({
+  messages: [
+    ...turn3.messages,
+    new HumanMessage("List my workflows."),
+  ],
+});
+printReply(turn4);
+
+// --- Turn 5: Delete a workflow ---
+console.log("\n=== Turn 5: Delete a workflow ===\n");
+
+const turn5 = await agent.invoke({
+  messages: [
+    ...turn4.messages,
+    new HumanMessage("Delete quick-review."),
+  ],
+});
+printReply(turn5);
+EXAMPLE5
+
 # --- Step 6: Install dependencies ---
 
 echo ""

@@ -1,6 +1,6 @@
 # Swarm Quick Start
 
-Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780866940-6a9ea66.mintlify.app/oss/javascript/deepagents/swarm) project running in one command. The setup script builds deepagentsjs, copies real source files into `sample-code/` for the examples to review, and scaffolds everything into this directory.
+Get a working [swarm](https://langchain-5e9cc07a-preview-colifr-1780866940-6a9ea66.mintlify.app/oss/javascript/deepagents/swarm) project running quickly. The setup script builds deepagentsjs, copies real source files into `sample-code/` for the examples to review, and scaffolds everything into this directory.
 
 ## Documentation
 
